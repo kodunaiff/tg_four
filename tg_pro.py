@@ -1,0 +1,2 @@
+name = 'qwerty'
+print(name)
