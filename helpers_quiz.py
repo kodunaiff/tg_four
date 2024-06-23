@@ -25,7 +25,7 @@ def main():
         file_contents = file.read()
 
     ffff = add_quiz(file_contents)
-    print(ffff)
+    print(ffff['Вопрос 1'])
 
 
 
