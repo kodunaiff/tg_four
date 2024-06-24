@@ -9,13 +9,17 @@ from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ConversationHandler
 
 from helpers_quiz import add_quiz
+from source_folder import give_quizs
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 
 logger = logging.getLogger(__name__)
-
+env = Env()
+env.read_env()
 _database = None
+host = env.str("REDIS_HOST")
+port = env.str("REDIS_PORT")
 quizs = dict()
 CHOOSING = '1'
 custom_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
@@ -27,7 +31,7 @@ loss = []
 def get_database_connection():
     global _database
     if _database is None:
-        _database = redis.Redis(host='localhost', port=6379, decode_responses=True)
+        _database = redis.Redis(host=host, port=port, decode_responses=True)
     return _database
 
 
@@ -42,7 +46,7 @@ def start(update: Update, context: CallbackContext) -> None:
 def show_question(update: Update, context: CallbackContext) -> None:
     chat_id = update.message.chat_id
     red_db = get_database_connection()
-    quest_amount = int(len(quizs)/2)
+    quest_amount = int(len(quizs) / 2)
     number = random.randint(1, quest_amount)
     question = quizs[f'Вопрос {number}']
     answer_full = quizs[f'Ответ {number}']
@@ -59,7 +63,7 @@ def give_answer(update: Update, context: CallbackContext) -> None:
     text = update.message.text
     chat_id = update.message.chat_id
     red_db = get_database_connection()
-    if text == red_db.get(f'{chat_id} Ответ'):
+    if text.lower() == red_db.get(f'{chat_id} Ответ').lower():
         update.message.reply_text(
             'Поздравляю!!! хотите продолжить?',
             reply_markup=main_menu)
@@ -98,14 +102,9 @@ def cancel(update: Update, context):
 
 
 if __name__ == '__main__':
-    env = Env()
-    env.read_env()
     tg_token = env.str("TG_TOKEN")
-
     phrases_folder = 'quiz-questions'
-    phrases = ['1vs1200.txt', '1vs1201.txt', '1vs1298.txt']
-    with open(f"{phrases_folder}/{phrases[1]}", "r", encoding="KOI8-R") as file:
-        file_contents = file.read()
+    file_contents = give_quizs(phrases_folder)
     updater = Updater(tg_token)
     dp = updater.dispatcher
 
