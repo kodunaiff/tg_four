@@ -15,8 +15,8 @@ from quiz_generator import give_quizs
 logger = logging.getLogger(__name__)
 
 CHOOSING = '1'
-custom_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
-main_menu = telegram.ReplyKeyboardMarkup(custom_keyboard)
+CUSTOM_KEYBOARD = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
+MAIN_MENU = telegram.ReplyKeyboardMarkup(CUSTOM_KEYBOARD)
 
 
 def parse_arguments():
@@ -39,7 +39,7 @@ def start(update: Update, context: CallbackContext) -> None:
     context.chat_data['loss'] = []
     update.message.reply_markdown_v2(
         fr'Hi {user.mention_markdown_v2()}\!',
-        reply_markup=main_menu)
+        reply_markup=MAIN_MENU)
     logger.info(f"User {user.id} started the bot.")
     return CHOOSING
 
@@ -50,9 +50,8 @@ def show_question(update: Update, context: CallbackContext) -> None:
     quest_amount = int(len(questionnaire) / 2)
     number = random.randint(1, quest_amount)
     question = questionnaire[f'Вопрос {number}']
-    answer_full = questionnaire[f'Ответ {number}']
-    answer_a = re.split('[.(]', answer_full)
-    answer = answer_a[0].strip()
+    answer_full = re.split('[.(]', questionnaire[f'Ответ {number}'])
+    answer = answer_full[0].strip()
     update.message.reply_text(f'№{number}--{question}')
     context.chat_data["current_quiz"] = question, answer
 
@@ -68,13 +67,13 @@ def give_answer(update: Update, context: CallbackContext) -> None:
     if text.lower() == answer.lower():
         update.message.reply_text(
             'Поздравляю!!! хотите продолжить?',
-            reply_markup=main_menu)
+            reply_markup=MAIN_MENU)
         context.chat_data['win'].append("Пользователь выиграл игру")
         logger.info(f"User {chat_id} answered correctly.")
     else:
         update.message.reply_text(
             'Неправильно..попробуйте еще раз',
-            reply_markup=main_menu)
+            reply_markup=MAIN_MENU)
         context.chat_data['loss'].append("Пользователь проиграл игру")
         logger.info(f"User {chat_id} answered incorrectly.")
 
