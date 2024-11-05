@@ -12,13 +12,7 @@ from vk_api.longpoll import VkLongPoll, VkEventType
 from helpers_quiz import add_quiz
 from quiz_generator import give_quizs
 
-
 logger = logging.getLogger(__name__)
-
-
-quizs = dict()
-win = []
-loss = []
 
 
 def parse_arguments():
@@ -33,7 +27,6 @@ def parse_arguments():
     )
     args = parser.parse_args()
     return args
-
 
 
 def start(event, vk_api):
@@ -52,15 +45,14 @@ def start(event, vk_api):
     logger.info(f"User {event.user_id} started the bot.")
 
 
-def show_question(event, vk_api,red_db):
+def show_question(event, vk_api, red_db):
     quest_amount = int(len(quizs) / 2)
     number = random.randint(1, quest_amount)
     question = quizs[f'Вопрос {number}']
-    answer_full = quizs[f'Ответ {number}']
-    answer_a = re.split('[.(]', answer_full)
-    answer = answer_a[0].strip()
-    red_db.set(f'Вопрос {number}', question)
-    red_db.set(f'Ответ', answer)
+    answer_full = re.split('[.(]', quizs[f'Ответ {number}'])
+    answer = answer_full[0].strip()
+    red_db.hset(event.user_id, "question", question)
+    red_db.hset(event.user_id, "answer", answer)
     vk_api.messages.send(
         user_id=event.user_id,
         message=question,
@@ -70,17 +62,17 @@ def show_question(event, vk_api,red_db):
 
 
 def give_up(event, vk_api, red_db):
-    text = red_db.get('Ответ')
+    correct_answer = red_db.hgetall(event.user_id)["answer"]
     vk_api.messages.send(
         user_id=event.user_id,
-        message=text,
+        message=correct_answer,
         random_id=random.randint(1, 1000),
     )
 
 
 def give_answer(event, vk_api, red_db):
-    answer = red_db.get('Ответ')
-    if event.text.lower() == answer.lower():
+    correct_answer = red_db.hgetall(event.user_id)["answer"]
+    if event.text.lower() == correct_answer.lower():
         vk_api.messages.send(
             user_id=event.user_id,
             message='Поздравляю!!! хотите продолжить?',
@@ -97,11 +89,11 @@ def give_answer(event, vk_api, red_db):
 
 
 def check(event, vk_api):
-    w = len(win)
-    l = len(loss)
+    victory_record = len(win)
+    loss_record = len(loss)
     vk_api.messages.send(
         user_id=event.user_id,
-        message=f'win = {w},loss = {l}',
+        message=f'win = {victory_record},loss = {loss_record}',
         random_id=random.randint(1, 1000),
     )
 
@@ -127,13 +119,13 @@ if __name__ == "__main__":
 
     host = env.str("REDIS_HOST")
     port = env.str("REDIS_PORT")
+    win = []
+    loss = []
 
     phrases_folder = parse_arguments().folder
     file_contents = give_quizs(phrases_folder)
-
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                         level=logging.INFO)
-
     quizs = add_quiz(file_contents)
     red_db = redis.Redis(
         host=host,
