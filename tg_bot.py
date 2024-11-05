@@ -16,12 +16,12 @@ logger = logging.getLogger(__name__)
 CHOOSING = '1'
 custom_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
 main_menu = telegram.ReplyKeyboardMarkup(custom_keyboard)
-win = []
-loss = []
 
 
 def start(update: Update, context: CallbackContext) -> None:
     user = update.effective_user
+    context.chat_data['win'] = []
+    context.chat_data['loss'] = []
     update.message.reply_markdown_v2(
         fr'Hi {user.mention_markdown_v2()}\!',
         reply_markup=main_menu)
@@ -54,23 +54,23 @@ def give_answer(update: Update, context: CallbackContext) -> None:
         update.message.reply_text(
             'Поздравляю!!! хотите продолжить?',
             reply_markup=main_menu)
-        win.append('win')
+        context.chat_data['win'].append("Пользователь выиграл игру")
         logger.info(f"User {chat_id} answered correctly.")
     else:
         update.message.reply_text(
             'Неправильно..попробуйте еще раз',
             reply_markup=main_menu)
-        loss.append('loss')
+        context.chat_data['loss'].append("Пользователь проиграл игру")
         logger.info(f"User {chat_id} answered incorrectly.")
 
     return CHOOSING
 
 
 def check(update: Update, context: CallbackContext) -> None:
-    w = len(win)
-    l = len(loss)
-    update.message.reply_text(f'win = {w},loss = {l}')
-    logger.info(f"User {update.message.chat_id} checked the score: win={w}, loss={l}.")
+    victory_record = len(context.chat_data["win"])
+    loss_record = len(context.chat_data["loss"])
+    update.message.reply_text(f'win = {victory_record},loss = {loss_record}')
+    logger.info(f"User {update.message.chat_id} checked the score: win={victory_record}, loss={loss_record}.")
     return CHOOSING
 
 
@@ -84,6 +84,8 @@ def give_up(update: Update, context: CallbackContext) -> None:
 
 
 def cancel(update: Update, context):
+    win = context.chat_data["win"]
+    loss = context.chat_data["loss"]
     update.message.reply_text(f' ваш итоговый счет win = {len(win)},loss = {len(loss)} До встречи!')
     logger.info(f"User {update.message.chat_id} ended the game with score: win={len(win)}, loss={len(loss)}.")
     win.clear()
@@ -107,6 +109,8 @@ if __name__ == '__main__':
     updater = Updater(tg_token)
     dp = updater.dispatcher
     dp.bot_data['questionnaire'] = add_quiz(file_contents)
+    dp.bot_data['win'] = []
+    dp.bot_data['loss'] = []
     dp.bot_data["redis"] = redis.Redis(
         host=host,
         port=port,
