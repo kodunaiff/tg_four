@@ -7,6 +7,7 @@ import telegram
 from environs import Env
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ConversationHandler
+import argparse
 
 from helpers_quiz import add_quiz
 from quiz_generator import give_quizs
@@ -16,6 +17,20 @@ logger = logging.getLogger(__name__)
 CHOOSING = '1'
 custom_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
 main_menu = telegram.ReplyKeyboardMarkup(custom_keyboard)
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Бот Викторина"
+    )
+    parser.add_argument(
+        '--folder',
+        default='quiz-questions',
+        type=str,
+        help='Указать путь к данным викторины',
+    )
+    args = parser.parse_args()
+    return args
 
 
 def start(update: Update, context: CallbackContext) -> None:
@@ -101,7 +116,7 @@ if __name__ == '__main__':
     tg_token = env.str("TG_TOKEN")
     host = env.str("REDIS_HOST")
     port = env.str("REDIS_PORT")
-    phrases_folder = 'quiz-questions'
+    phrases_folder = parse_arguments().folder
     file_contents = give_quizs(phrases_folder)
 
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
