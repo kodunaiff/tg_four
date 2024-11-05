@@ -9,15 +9,12 @@ from vk_api.keyboard import VkKeyboard
 from vk_api.longpoll import VkLongPoll, VkEventType
 
 from helpers_quiz import add_quiz
-from source_folder import give_quizs
+from quiz_generator import give_quizs
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
 
 logger = logging.getLogger(__name__)
 
-env = Env()
-env.read_env()
+
 _database = None
 host = env.str("REDIS_HOST")
 port = env.str("REDIS_PORT")
@@ -46,6 +43,7 @@ def start(event, vk_api):
         random_id=random.randint(1, 1000),
         keyboard=keyboard.get_keyboard(),
     )
+    logger.info(f"User {event.user_id} started the bot.")
 
 
 def show_question(event, vk_api):
@@ -63,6 +61,7 @@ def show_question(event, vk_api):
         message=question,
         random_id=random.randint(1, 1000),
     )
+    logger.info(f"Sent question {number} to user {event.user_id}.")
 
 
 def give_up(event, vk_api):
@@ -120,8 +119,13 @@ def cancel(event, vk_api):
 
 
 if __name__ == "__main__":
+    env = Env()
+    env.read_env()
     phrases_folder = 'quiz-questions'
     file_contents = give_quizs(phrases_folder)
+
+    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                        level=logging.INFO)
     quizs = add_quiz(file_contents)
     red_db = get_database_connection()
     vk_session = vk.VkApi(token=env.str("VK_TOKEN"))

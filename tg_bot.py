@@ -9,18 +9,10 @@ from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ConversationHandler
 
 from helpers_quiz import add_quiz
-from source_folder import give_quizs
-
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
+from quiz_generator import give_quizs
 
 logger = logging.getLogger(__name__)
-env = Env()
-env.read_env()
-_database = None
-host = env.str("REDIS_HOST")
-port = env.str("REDIS_PORT")
-quizs = dict()
+
 CHOOSING = '1'
 custom_keyboard = [['Новый вопрос', 'Сдаться'], ['Мой счет']]
 main_menu = telegram.ReplyKeyboardMarkup(custom_keyboard)
@@ -28,51 +20,48 @@ win = []
 loss = []
 
 
-def get_database_connection():
-    global _database
-    if _database is None:
-        _database = redis.Redis(host=host, port=port, decode_responses=True)
-    return _database
-
-
 def start(update: Update, context: CallbackContext) -> None:
     user = update.effective_user
     update.message.reply_markdown_v2(
         fr'Hi {user.mention_markdown_v2()}\!',
         reply_markup=main_menu)
+    logger.info(f"User {user.id} started the bot.")
     return CHOOSING
 
 
 def show_question(update: Update, context: CallbackContext) -> None:
+    questionnaire = context.bot_data["questionnaire"]
     chat_id = update.message.chat_id
-    red_db = get_database_connection()
-    quest_amount = int(len(quizs) / 2)
+    quest_amount = int(len(questionnaire) / 2)
     number = random.randint(1, quest_amount)
-    question = quizs[f'Вопрос {number}']
-    answer_full = quizs[f'Ответ {number}']
+    question = questionnaire[f'Вопрос {number}']
+    answer_full = questionnaire[f'Ответ {number}']
     answer_a = re.split('[.(]', answer_full)
     answer = answer_a[0].strip()
-    red_db.set(f'{chat_id} Вопрос {number}', question)
-    red_db.set(f'{chat_id} Ответ', answer)
     update.message.reply_text(f'№{number}--{question}')
+    context.chat_data["current_quiz"] = question, answer
+
+    logger.info(f"Sent question {number} to user {chat_id}.")
 
     return CHOOSING
 
 
 def give_answer(update: Update, context: CallbackContext) -> None:
+    question, answer = context.chat_data["current_quiz"]
     text = update.message.text
     chat_id = update.message.chat_id
-    red_db = get_database_connection()
-    if text.lower() == red_db.get(f'{chat_id} Ответ').lower():
+    if text.lower() == answer.lower():
         update.message.reply_text(
             'Поздравляю!!! хотите продолжить?',
             reply_markup=main_menu)
         win.append('win')
+        logger.info(f"User {chat_id} answered correctly.")
     else:
         update.message.reply_text(
             'Неправильно..попробуйте еще раз',
             reply_markup=main_menu)
         loss.append('loss')
+        logger.info(f"User {chat_id} answered incorrectly.")
 
     return CHOOSING
 
@@ -81,20 +70,22 @@ def check(update: Update, context: CallbackContext) -> None:
     w = len(win)
     l = len(loss)
     update.message.reply_text(f'win = {w},loss = {l}')
+    logger.info(f"User {update.message.chat_id} checked the score: win={w}, loss={l}.")
     return CHOOSING
 
 
 def give_up(update: Update, context: CallbackContext) -> None:
+    question, answer = context.chat_data["current_quiz"]
     chat_id = update.message.chat_id
-    red_db = get_database_connection()
-    text = red_db.get(f'{chat_id} Ответ')
-    update.message.reply_text(f'your answer: {text}')
+    update.message.reply_text(f'your answer: {answer}')
+    logger.info(f"User {chat_id} gave up. Correct answer: {answer}.")
 
     return CHOOSING
 
 
 def cancel(update: Update, context):
     update.message.reply_text(f' ваш итоговый счет win = {len(win)},loss = {len(loss)} До встречи!')
+    logger.info(f"User {update.message.chat_id} ended the game with score: win={len(win)}, loss={len(loss)}.")
     win.clear()
     loss.clear()
     update.message.reply_text('Диалог завершен.')
@@ -102,11 +93,26 @@ def cancel(update: Update, context):
 
 
 if __name__ == '__main__':
+    env = Env()
+    env.read_env()
+
     tg_token = env.str("TG_TOKEN")
+    host = env.str("REDIS_HOST")
+    port = env.str("REDIS_PORT")
     phrases_folder = 'quiz-questions'
     file_contents = give_quizs(phrases_folder)
+
+    logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                        level=logging.INFO)
     updater = Updater(tg_token)
     dp = updater.dispatcher
+    dp.bot_data['questionnaire'] = add_quiz(file_contents)
+    dp.bot_data["redis"] = redis.Redis(
+        host=host,
+        port=port,
+        protocol=3,
+        decode_responses=True)
+    dp.update_persistence()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
@@ -121,9 +127,7 @@ if __name__ == '__main__':
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
-
     dp.add_handler(conv_handler)
-
-    quizs = add_quiz(file_contents)
+    logger.info("Bot started and ready to receive updates.")
     updater.start_polling()
     updater.idle()
